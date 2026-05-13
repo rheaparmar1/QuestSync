@@ -16,7 +16,7 @@ A web app for University of Waterloo students to parse course outlines and sched
    - Windows: `venv\Scripts\activate`
    - macOS/Linux: `source venv/bin/activate`
 4. Install dependencies: `pip install -r requirements.txt`
-5. Create a `.env` file based on `.env.example` and add your Anthropic API key
+5. Create a `backend/.env` file and add your Anthropic API key: `ANTHROPIC_API_KEY=your-key-here`
 6. Run the server: `uvicorn main:app --reload`
 
 ### Frontend Setup

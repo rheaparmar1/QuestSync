@@ -83,11 +83,11 @@ export function ReviewStep({
           <CalendarClock className="h-5 w-5 text-uw-gold" />
           <h2 className="font-semibold text-gray-900">Ready to add</h2>
           <span className="ml-auto text-xs text-gray-500">
-            {readyEvents.length + visibleSections.length} item{readyEvents.length + visibleSections.length !== 1 ? 's' : ''}
+            {(includeAssessments ? readyEvents.length : 0) + visibleSections.length} item{(includeAssessments ? readyEvents.length : 0) + visibleSections.length !== 1 ? 's' : ''}
           </span>
         </div>
 
-        {readyEvents.length === 0 && visibleSections.length === 0 ? (
+        {(includeAssessments ? readyEvents.length : 0) === 0 && visibleSections.length === 0 ? (
           <p className="text-sm text-gray-500 italic">No events to show with current filters.</p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-gray-200">
@@ -168,7 +168,7 @@ export function ReviewStep({
       )}
 
       {/* Download */}
-      <Button size="lg" className="w-full" onClick={onDownload} disabled={downloading}>
+      <Button size="lg" className="w-full" onClick={onDownload} disabled={downloading || (!includeLectures && !includeTutorials && !includeAssessments)}>
         {downloading ? (
           <span className="flex items-center gap-2">
             <span className="h-4 w-4 rounded-full border-2 border-black border-t-transparent animate-spin" />

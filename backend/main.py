@@ -1,12 +1,13 @@
-import os
+import base64
 import json
+import os
+from datetime import datetime, timedelta, date
+from pathlib import Path
+from typing import Optional
+
 from dotenv import load_dotenv
 
-load_dotenv()
-import base64
-from datetime import datetime, timedelta, date
-from io import BytesIO
-from typing import Optional
+load_dotenv(Path(__file__).parent / ".env")
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
