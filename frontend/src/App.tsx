@@ -56,6 +56,7 @@ export default function App() {
 
     try {
       for (let i = 0; i < outlines.length; i++) {
+        if (i > 0) await new Promise((r) => setTimeout(r, 2000))
         setProcessingMsg(`Parsing outline ${i + 1} of ${outlines.length}…`)
         const form = new FormData()
         form.append('file', outlines[i])

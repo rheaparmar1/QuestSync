@@ -95,7 +95,7 @@ export function ReviewStep({
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">Course</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Event</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">Event / Details</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">Date / Time</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">Type</th>
                 </tr>
@@ -105,10 +105,17 @@ export function ReviewStep({
                   readyEvents.map((ev, i) => (
                     <tr key={`ev-${i}`} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-mono font-semibold text-black">{ev.course_code}</td>
-                      <td className="px-4 py-3 text-gray-800">{ev.event_name}</td>
+                      <td className="px-4 py-3 text-gray-800">
+                        <div>{ev.event_name}</div>
+                        {ev.location && <div className="text-xs text-gray-400 mt-0.5">{ev.location}</div>}
+                      </td>
                       <td className="px-4 py-3 text-gray-600">
-                        {ev.date}
-                        {ev.time && <span className="ml-1 text-gray-400">@ {ev.time}</span>}
+                        <div>{ev.date}</div>
+                        {ev.start_time && (
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {ev.start_time}{ev.end_time ? `–${ev.end_time}` : ''}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3"><Badge type={ev.type} /></td>
                     </tr>
@@ -117,7 +124,11 @@ export function ReviewStep({
                   <tr key={`sec-${i}`} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono font-semibold text-black">{sec.course_code}</td>
                     <td className="px-4 py-3 text-gray-800">
-                      {sec.type === 'lecture' ? 'LEC' : 'TUT'} {sec.section} — {sec.days.join(', ')}
+                      <div>{sec.type === 'lecture' ? 'LEC' : 'TUT'} {sec.section} — {sec.days.join(', ')}</div>
+                      <div className="text-xs text-gray-400 mt-0.5 space-x-2">
+                        {sec.location && <span>{sec.location}</span>}
+                        {sec.professor && <span>· {sec.professor}</span>}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {sec.start_time}–{sec.end_time}

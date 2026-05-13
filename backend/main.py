@@ -1,7 +1,9 @@
 import base64
 import json
 import os
+import re
 from datetime import datetime, timedelta, date
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Optional
 
@@ -37,16 +39,50 @@ def get_client():
 OUTLINE_PROMPT = (
     "You are a university calendar assistant. Parse this course outline and extract every assessment, "
     "exam, midterm, quiz, assignment, and project. Return ONLY a JSON array with no markdown, no explanation. "
-    "Each item: {course_code, event_name, date (YYYY-MM-DD or null if TBD), time (HH:MM or null), "
-    "location (or null), type (exam/midterm/assignment/quiz/project), is_tbd (true if date is TBD or unknown)}"
+    "Each item: {course_code, event_name, date (YYYY-MM-DD or null if TBD), start_time (HH:MM 24hr or null), "
+    "end_time (HH:MM 24hr or null), location (or null), type (exam/midterm/assignment/quiz/project), "
+    "is_tbd (true if date is TBD or unknown)}"
 )
 
 SCHEDULE_PROMPT = (
     "You are a university calendar assistant. Parse this Quest schedule screenshot and extract every course section. "
     "Return ONLY a JSON array with no markdown, no explanation. "
     "Each item: {course_code, section, type (lecture or tutorial), days (array of full day names), "
-    "start_time (HH:MM 24hr), end_time (HH:MM 24hr), location, start_date (use 2026-05-05), end_date (use 2026-08-01)}"
+    "start_time (HH:MM 24hr), end_time (HH:MM 24hr), location, professor (instructor name or null), "
+    "start_date (use 2026-05-05), end_date (use 2026-08-01)}"
 )
+
+
+class _TextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self._skip = False
+        self._parts: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style", "head"):
+            self._skip = True
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style", "head"):
+            self._skip = False
+
+    def handle_data(self, data):
+        if not self._skip:
+            stripped = data.strip()
+            if stripped:
+                self._parts.append(stripped)
+
+    def get_text(self) -> str:
+        return "\n".join(self._parts)
+
+
+def _strip_html(raw: str) -> str:
+    parser = _TextExtractor()
+    parser.feed(raw)
+    text = parser.get_text()
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def _is_html(file: UploadFile) -> bool:
@@ -64,9 +100,9 @@ async def parse_outline(file: UploadFile = File(...)):
     client = get_client()
 
     if _is_html(file):
-        text = contents.decode("utf-8", errors="replace")
+        text = _strip_html(contents.decode("utf-8", errors="replace"))
         content_blocks = [
-            {"type": "text", "text": f"Course outline (HTML):\n\n{text}"},
+            {"type": "text", "text": f"Course outline:\n\n{text}"},
             {"type": "text", "text": OUTLINE_PROMPT},
         ]
     else:
@@ -81,7 +117,7 @@ async def parse_outline(file: UploadFile = File(...)):
 
     try:
         message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=4096,
             messages=[{"role": "user", "content": content_blocks}],
         )
@@ -115,7 +151,7 @@ async def parse_schedule(file: UploadFile = File(...)):
 
     try:
         message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=4096,
             messages=[
                 {
@@ -218,10 +254,11 @@ async def generate_ics(req: GenerateIcsRequest):
             name = ev.get("event_name", "")
             ical_event.add("summary", f"{course} — {name}")
 
-            ev_time = parse_time(ev.get("time"))
-            if ev_time:
-                start_dt = tz.localize(datetime.combine(d, ev_time))
-                end_dt = start_dt + timedelta(hours=2)
+            start_t = parse_time(ev.get("start_time"))
+            end_t = parse_time(ev.get("end_time"))
+            if start_t:
+                start_dt = tz.localize(datetime.combine(d, start_t))
+                end_dt = tz.localize(datetime.combine(d, end_t)) if end_t else start_dt + timedelta(hours=2)
                 ical_event.add("dtstart", start_dt)
                 ical_event.add("dtend", end_dt)
             else:
@@ -273,10 +310,11 @@ async def generate_ics(req: GenerateIcsRequest):
                 loc = sec.get("location")
                 if loc:
                     ical_event.add("location", loc)
-                ical_event.add(
-                    "description",
-                    f"{course} | {sec_type.capitalize()} | Section {section}",
-                )
+                prof = sec.get("professor")
+                desc = f"{course} | {sec_type.capitalize()} | Section {section}"
+                if prof:
+                    desc += f" | {prof}"
+                ical_event.add("description", desc)
                 cal.add_component(ical_event)
 
     ics_bytes = cal.to_ical()
