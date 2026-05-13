@@ -1,5 +1,8 @@
 import os
 import json
+from dotenv import load_dotenv
+
+load_dotenv()
 import base64
 from datetime import datetime, timedelta, date
 from io import BytesIO
