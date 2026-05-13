@@ -49,35 +49,41 @@ SCHEDULE_PROMPT = (
 )
 
 
+def _is_html(file: UploadFile) -> bool:
+    name = (file.filename or "").lower()
+    ct = (file.content_type or "").lower()
+    return name.endswith(".html") or name.endswith(".htm") or "html" in ct
+
+
 @app.post("/parse-outline")
 async def parse_outline(file: UploadFile = File(...)):
     contents = await file.read()
     if len(contents) == 0:
         raise HTTPException(status_code=400, detail="Empty file")
 
-    b64 = base64.standard_b64encode(contents).decode("utf-8")
     client = get_client()
+
+    if _is_html(file):
+        text = contents.decode("utf-8", errors="replace")
+        content_blocks = [
+            {"type": "text", "text": f"Course outline (HTML):\n\n{text}"},
+            {"type": "text", "text": OUTLINE_PROMPT},
+        ]
+    else:
+        b64 = base64.standard_b64encode(contents).decode("utf-8")
+        content_blocks = [
+            {
+                "type": "document",
+                "source": {"type": "base64", "media_type": "application/pdf", "data": b64},
+            },
+            {"type": "text", "text": OUTLINE_PROMPT},
+        ]
 
     try:
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=4096,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "document",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "application/pdf",
-                                "data": b64,
-                            },
-                        },
-                        {"type": "text", "text": OUTLINE_PROMPT},
-                    ],
-                }
-            ],
+            messages=[{"role": "user", "content": content_blocks}],
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Claude API error: {str(e)}")
@@ -88,7 +94,7 @@ async def parse_outline(file: UploadFile = File(...)):
     except json.JSONDecodeError:
         raise HTTPException(
             status_code=422,
-            detail="Could not parse the outline. Please try a cleaner PDF.",
+            detail="Could not parse the outline. Please try a cleaner PDF or HTML file.",
         )
 
     return {"events": events}

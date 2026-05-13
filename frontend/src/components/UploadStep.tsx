@@ -9,21 +9,34 @@ interface DropZoneProps {
   icon: React.ReactNode
   file: File | null
   onFile: (f: File) => void
+  onFiles?: (files: File[]) => void
+  multiple?: boolean
   onClear: () => void
   hint: string
 }
 
-function DropZone({ label, accept, icon, file, onFile, onClear, hint }: DropZoneProps) {
+function DropZone({ label, accept, icon, file, onFile, onFiles, multiple, onClear, hint }: DropZoneProps) {
   const [dragging, setDragging] = useState(false)
+
+  const handleFiles = useCallback(
+    (fileList: FileList) => {
+      const arr = Array.from(fileList)
+      if (multiple && onFiles) {
+        onFiles(arr)
+      } else if (arr[0]) {
+        onFile(arr[0])
+      }
+    },
+    [multiple, onFile, onFiles],
+  )
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
       setDragging(false)
-      const dropped = e.dataTransfer.files[0]
-      if (dropped) onFile(dropped)
+      handleFiles(e.dataTransfer.files)
     },
-    [onFile],
+    [handleFiles],
   )
 
   return (
@@ -59,13 +72,14 @@ function DropZone({ label, accept, icon, file, onFile, onClear, hint }: DropZone
           </div>
           <label className="cursor-pointer">
             <span className="text-sm text-uw-black underline underline-offset-2 hover:text-yellow-600 font-medium">
-              Browse file
+              Browse file{multiple ? 's' : ''}
             </span>
             <input
               type="file"
               accept={accept}
+              multiple={multiple}
               className="sr-only"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f) }}
+              onChange={(e) => { if (e.target.files?.length) handleFiles(e.target.files) }}
             />
           </label>
         </>
@@ -83,9 +97,9 @@ interface Props {
 }
 
 export function UploadStep({ outlines, schedule, onOutlinesChange, onScheduleChange, onSubmit }: Props) {
-  const handleOutlineFile = useCallback(
-    (f: File) => {
-      onOutlinesChange([...outlines, f])
+  const handleOutlineFiles = useCallback(
+    (files: File[]) => {
+      onOutlinesChange([...outlines, ...files])
     },
     [outlines, onOutlinesChange],
   )
@@ -98,7 +112,7 @@ export function UploadStep({ outlines, schedule, onOutlinesChange, onScheduleCha
     <div className="space-y-8">
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-gray-900">Course Outlines</h2>
-        <p className="text-sm text-gray-500">Upload one PDF per course. You can add multiple.</p>
+        <p className="text-sm text-gray-500">Drop all your course outlines at once. PDF and HTML supported.</p>
 
         {outlines.length > 0 && (
           <ul className="space-y-2">
@@ -117,13 +131,15 @@ export function UploadStep({ outlines, schedule, onOutlinesChange, onScheduleCha
         )}
 
         <DropZone
-          label="Drop a course outline PDF here"
-          accept=".pdf,application/pdf"
+          label="Drop course outlines here"
+          accept=".pdf,application/pdf,.html,.htm,text/html"
           icon={<FileText className="h-10 w-10" />}
           file={null}
-          onFile={handleOutlineFile}
+          onFile={() => {}}
+          onFiles={handleOutlineFiles}
+          multiple
           onClear={() => {}}
-          hint="PDF files only • drag & drop or browse"
+          hint="PDF or HTML • drop multiple at once or browse"
         />
       </div>
 
