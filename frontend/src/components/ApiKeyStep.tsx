@@ -100,7 +100,7 @@ export function ApiKeyStep({ onSubmit }: Props) {
             Never manually enter<br className="hidden sm:block" /> a deadline again.
           </h1>
           <p className="text-gray-700 text-base sm:text-lg max-w-xl mx-auto leading-relaxed font-normal">
-            QuestSync reads your course outlines and Quest schedule, then exports every exam, quiz, assignment, and class time straight to your calendar — in minutes.
+            QuestSync reads your course outlines and Quest schedule, then automatically adds exams, quizzes, assignments, course times, and tutorials to your calendar.
           </p>
         </div>
 
