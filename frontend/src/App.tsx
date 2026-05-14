@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
+import { SiteFooter } from '@/components/SiteShell'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 import { ApiKeyStep } from '@/components/ApiKeyStep'
@@ -326,9 +327,7 @@ export default function App() {
         )}
       </main>
 
-      <footer className="mt-12 pb-8 text-center text-xs text-gray-400">
-        QuestSync — Built for University of Waterloo students
-      </footer>
+      <SiteFooter />
     </div>
   )
 }
