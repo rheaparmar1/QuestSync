@@ -14,17 +14,28 @@ const STEP_LABELS = ['Upload', 'Processing', 'Review & Export']
 function StepIndicator({ current }: { current: Step }) {
   const idx = current === 'upload' ? 0 : current === 'processing' ? 1 : 2
   return (
-    <div className="flex items-center gap-2 mb-8">
+    <div className="flex items-center mb-8">
       {STEP_LABELS.map((label, i) => (
-        <div key={label} className="flex items-center gap-2">
-          <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${i <= idx ? 'bg-uw-gold text-black' : 'bg-gray-200 text-gray-400'}`}>
-            {i + 1}
+        <div key={label} className="flex items-center">
+          <div className="flex flex-col items-center gap-1.5">
+            <div className={`
+              flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all duration-300
+              ${i < idx  ? 'bg-uw-gold text-black' :
+                i === idx ? 'bg-uw-gold text-black ring-4 ring-yellow-200' :
+                            'bg-gray-100 text-gray-400'}
+            `}>
+              {i < idx ? (
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                </svg>
+              ) : i + 1}
+            </div>
+            <span className={`text-xs font-medium transition-colors duration-300 whitespace-nowrap ${i <= idx ? 'text-gray-900' : 'text-gray-400'}`}>
+              {label}
+            </span>
           </div>
-          <span className={`text-sm font-medium ${i <= idx ? 'text-gray-900' : 'text-gray-400'}`}>
-            {label}
-          </span>
           {i < STEP_LABELS.length - 1 && (
-            <div className={`h-px w-6 ${i < idx ? 'bg-uw-gold' : 'bg-gray-200'}`} />
+            <div className={`h-0.5 w-10 sm:w-16 mx-2 mb-4 rounded-full transition-all duration-500 ${i < idx ? 'bg-uw-gold' : 'bg-gray-200'}`} />
           )}
         </div>
       ))}
@@ -244,7 +255,7 @@ export default function App() {
       </header>
 
       {/* Main */}
-      <main className="mx-auto max-w-3xl px-4 py-8">
+      <main className="mx-auto max-w-3xl px-4 sm:px-6 py-8">
         {step !== 'apikey' && <StepIndicator current={step} />}
 
         {error && (
