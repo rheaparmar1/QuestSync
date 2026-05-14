@@ -13,7 +13,6 @@ export function ProcessingStep({ message }: Props) {
       </div>
       <div className="text-center space-y-1">
         <p className="font-semibold text-gray-800">{message}</p>
-        <p className="text-sm text-gray-500">Claude is reading your documents…</p>
       </div>
     </div>
   )

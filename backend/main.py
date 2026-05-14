@@ -11,28 +11,39 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent / ".env")
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
+# Allow OAuth over HTTP for local development
+os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
+
+from fastapi import FastAPI, File, UploadFile, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, RedirectResponse
 from pydantic import BaseModel
 import anthropic
 from icalendar import Calendar, Event
 import pytz
+from google_auth_oauthlib.flow import Flow
+from google.auth.transport.requests import Request as GoogleRequest
+from googleapiclient.discovery import build
 
 app = FastAPI()
 
+_frontend_url = os.environ.get("FRONTEND_URL", "")
+_allow_origins = ["http://localhost:5173", "http://localhost:3000"]
+if _frontend_url:
+    _allow_origins.append(_frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=_allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-def get_client():
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+def get_client(user_key: Optional[str] = None):
+    api_key = user_key or os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not set")
+        raise HTTPException(status_code=401, detail="No API key provided. Please enter your Claude API key.")
     return anthropic.Anthropic(api_key=api_key)
 
 
@@ -92,12 +103,12 @@ def _is_html(file: UploadFile) -> bool:
 
 
 @app.post("/parse-outline")
-async def parse_outline(file: UploadFile = File(...)):
+async def parse_outline(file: UploadFile = File(...), x_claude_key: Optional[str] = Header(None)):
     contents = await file.read()
     if len(contents) == 0:
         raise HTTPException(status_code=400, detail="Empty file")
 
-    client = get_client()
+    client = get_client(x_claude_key)
 
     if _is_html(file):
         text = _strip_html(contents.decode("utf-8", errors="replace"))
@@ -137,7 +148,7 @@ async def parse_outline(file: UploadFile = File(...)):
 
 
 @app.post("/parse-schedule")
-async def parse_schedule(file: UploadFile = File(...)):
+async def parse_schedule(file: UploadFile = File(...), x_claude_key: Optional[str] = Header(None)):
     contents = await file.read()
     if len(contents) == 0:
         raise HTTPException(status_code=400, detail="Empty file")
@@ -147,7 +158,7 @@ async def parse_schedule(file: UploadFile = File(...)):
         content_type = "image/png"
 
     b64 = base64.standard_b64encode(contents).decode("utf-8")
-    client = get_client()
+    client = get_client(x_claude_key)
 
     try:
         message = client.messages.create(
@@ -191,6 +202,226 @@ class GenerateIcsRequest(BaseModel):
     include_lectures: bool = True
     include_tutorials: bool = True
     include_assessments: bool = True
+    include_assignments: bool = True
+    color_code: bool = True
+    custom_colors: dict = {}
+    calendar_id: str = "primary"
+
+
+EVENT_COLORS = {
+    "exam":       "#EF4444",
+    "midterm":    "#F97316",
+    "assignment": "#3B82F6",
+    "quiz":       "#A855F7",
+    "lecture":    "#9CA3AF",
+    "tutorial":   "#6366F1",
+}
+
+EXAM_TYPES = {"exam", "midterm", "quiz"}
+ASSIGNMENT_TYPES = {"assignment", "project"}
+
+
+def _ics_color(ev_type: str, custom_colors: dict) -> str:
+    key = "assignment" if ev_type in ASSIGNMENT_TYPES else ev_type
+    return custom_colors.get(key) or EVENT_COLORS.get(key, "")
+
+# Google Calendar color IDs (predefined palette)
+GOOGLE_COLOR_IDS = {
+    "exam":       "11",  # Tomato
+    "midterm":    "6",   # Tangerine
+    "assignment": "7",   # Peacock
+    "quiz":       "3",   # Grape
+    "project":    "2",   # Sage
+    "lecture":    "8",   # Graphite
+    "tutorial":   "9",   # Blueberry
+}
+
+RRULE_DAYS = {
+    "monday": "MO", "tuesday": "TU", "wednesday": "WE",
+    "thursday": "TH", "friday": "FR", "saturday": "SA", "sunday": "SU",
+}
+
+GOOGLE_SCOPES = [
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar.readonly",
+]
+GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+
+_google_credentials = None
+_google_flow = None
+
+
+def _google_client_config() -> dict:
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise HTTPException(500, "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are not set in .env")
+    return {
+        "web": {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": [GOOGLE_REDIRECT_URI],
+        }
+    }
+
+
+def _google_service():
+    global _google_credentials
+    if not _google_credentials:
+        raise HTTPException(401, "Not connected to Google Calendar. Please connect first.")
+    if _google_credentials.expired and _google_credentials.refresh_token:
+        _google_credentials.refresh(GoogleRequest())
+    return build("calendar", "v3", credentials=_google_credentials)
+
+
+@app.get("/auth/google")
+async def google_auth():
+    global _google_flow
+    _google_flow = Flow.from_client_config(
+        _google_client_config(), scopes=GOOGLE_SCOPES, redirect_uri=GOOGLE_REDIRECT_URI
+    )
+    auth_url, _ = _google_flow.authorization_url(prompt="consent", access_type="offline")
+    return RedirectResponse(auth_url)
+
+
+@app.get("/auth/google/callback")
+async def google_callback(code: str):
+    global _google_credentials, _google_flow
+    if not _google_flow:
+        raise HTTPException(400, "OAuth flow not initialised — please try connecting again.")
+    _google_flow.fetch_token(code=code)
+    _google_credentials = _google_flow.credentials
+    _google_flow = None
+    return RedirectResponse(f"{FRONTEND_URL}/?google_auth=1")
+
+
+@app.get("/auth/google/status")
+async def google_status():
+    return {"authenticated": _google_credentials is not None}
+
+
+@app.get("/auth/google/calendars")
+async def list_calendars():
+    service = _google_service()
+    result = service.calendarList().list().execute()
+    calendars = [
+        {"id": c["id"], "name": c["summary"], "primary": c.get("primary", False)}
+        for c in result.get("items", [])
+        if c.get("accessRole") in ("owner", "writer")
+    ]
+    return {"calendars": calendars}
+
+
+@app.post("/upload-to-google")
+async def upload_to_google(req: GenerateIcsRequest):
+    service = _google_service()
+    tz_str = "America/Toronto"
+    created = 0
+
+    for ev in req.events:
+        if ev.get("is_tbd") or not ev.get("date"):
+            continue
+        ev_type = ev.get("type", "")
+        if ev_type in EXAM_TYPES and not req.include_assessments:
+            continue
+        if ev_type in ASSIGNMENT_TYPES and not req.include_assignments:
+            continue
+        try:
+            d = datetime.strptime(ev["date"], "%Y-%m-%d").date()
+        except ValueError:
+            continue
+
+        course = ev.get("course_code", "")
+        name = ev.get("event_name", "")
+        body: dict = {
+            "summary": f"{course} — {name}",
+            "description": f"{course} | {ev_type}",
+        }
+        if ev.get("location"):
+            body["location"] = ev["location"]
+
+        start_t = ev.get("start_time")
+        end_t = ev.get("end_time")
+        if start_t:
+            end_str = (
+                f"{d}T{end_t}:00"
+                if end_t
+                else (datetime.strptime(f"{d}T{start_t}:00", "%Y-%m-%dT%H:%M:%S") + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S")
+            )
+            body["start"] = {"dateTime": f"{d}T{start_t}:00", "timeZone": tz_str}
+            body["end"] = {"dateTime": end_str, "timeZone": tz_str}
+        else:
+            body["start"] = {"date": str(d)}
+            body["end"] = {"date": str(d + timedelta(days=1))}
+
+        gcal_key = "assignment" if ev_type in ASSIGNMENT_TYPES else ev_type
+        if req.color_code and gcal_key in GOOGLE_COLOR_IDS:
+            body["colorId"] = GOOGLE_COLOR_IDS[gcal_key]
+
+        service.events().insert(calendarId=req.calendar_id, body=body).execute()
+        created += 1
+
+    for sec in req.sections:
+        sec_type = sec.get("type", "").lower()
+        if sec_type == "lecture" and not req.include_lectures:
+            continue
+        if sec_type == "tutorial" and not req.include_tutorials:
+            continue
+
+        start_t = sec.get("start_time")
+        end_t = sec.get("end_time")
+        days = sec.get("days", [])
+        if not start_t or not end_t or not days:
+            continue
+
+        try:
+            start_date = datetime.strptime(sec.get("start_date", "2026-05-05"), "%Y-%m-%d").date()
+            end_date = datetime.strptime(sec.get("end_date", "2026-08-01"), "%Y-%m-%d").date()
+        except ValueError:
+            start_date = date(2026, 5, 5)
+            end_date = date(2026, 8, 1)
+
+        # Find the earliest first occurrence across all days
+        first_occ = None
+        for day_name in days:
+            for occ in date_range_for_day(day_name, start_date, end_date):
+                if first_occ is None or occ < first_occ:
+                    first_occ = occ
+                break  # only need the first occurrence per day
+
+        if not first_occ:
+            continue
+
+        byday = ",".join(RRULE_DAYS[d.lower()] for d in days if d.lower() in RRULE_DAYS)
+        rrule = f"RRULE:FREQ=WEEKLY;BYDAY={byday};UNTIL={end_date.strftime('%Y%m%dT000000Z')}"
+
+        course = sec.get("course_code", "")
+        section = sec.get("section", "")
+        label = "LEC" if sec_type == "lecture" else "TUT"
+        prof = sec.get("professor")
+        desc = f"{sec_type.capitalize()} - Section {section}"
+        if prof:
+            desc += f"\n{prof}"
+
+        body = {
+            "summary": f"{course} {label}",
+            "description": desc,
+            "recurrence": [rrule],
+            "start": {"dateTime": f"{first_occ}T{start_t}:00", "timeZone": tz_str},
+            "end": {"dateTime": f"{first_occ}T{end_t}:00", "timeZone": tz_str},
+        }
+        if sec.get("location"):
+            body["location"] = sec["location"]
+        if req.color_code and sec_type in GOOGLE_COLOR_IDS:
+            body["colorId"] = GOOGLE_COLOR_IDS[sec_type]
+
+        service.events().insert(calendarId=req.calendar_id, body=body).execute()
+        created += 1
+
+    return {"created": created}
 
 
 DAY_MAP = {
@@ -237,39 +468,48 @@ async def generate_ics(req: GenerateIcsRequest):
     tz = pytz.timezone("America/Toronto")
 
     # Add assessment events
-    if req.include_assessments:
-        for ev in req.events:
-            if ev.get("is_tbd"):
-                continue
-            ev_date = ev.get("date")
-            if not ev_date:
-                continue
-            try:
-                d = datetime.strptime(ev_date, "%Y-%m-%d").date()
-            except ValueError:
-                continue
+    for ev in req.events:
+        if ev.get("is_tbd"):
+            continue
+        ev_date = ev.get("date")
+        if not ev_date:
+            continue
+        ev_type = ev.get("type", "")
+        if ev_type in EXAM_TYPES and not req.include_assessments:
+            continue
+        if ev_type in ASSIGNMENT_TYPES and not req.include_assignments:
+            continue
+        try:
+            d = datetime.strptime(ev_date, "%Y-%m-%d").date()
+        except ValueError:
+            continue
 
-            ical_event = Event()
-            course = ev.get("course_code", "")
-            name = ev.get("event_name", "")
-            ical_event.add("summary", f"{course} — {name}")
+        ical_event = Event()
+        course = ev.get("course_code", "")
+        name = ev.get("event_name", "")
+        ical_event.add("summary", f"{course} — {name}")
 
-            start_t = parse_time(ev.get("start_time"))
-            end_t = parse_time(ev.get("end_time"))
-            if start_t:
-                start_dt = tz.localize(datetime.combine(d, start_t))
-                end_dt = tz.localize(datetime.combine(d, end_t)) if end_t else start_dt + timedelta(hours=2)
-                ical_event.add("dtstart", start_dt)
-                ical_event.add("dtend", end_dt)
-            else:
-                ical_event.add("dtstart", d)
-                ical_event.add("dtend", d + timedelta(days=1))
+        start_t = parse_time(ev.get("start_time"))
+        end_t = parse_time(ev.get("end_time"))
+        if start_t:
+            start_dt = tz.localize(datetime.combine(d, start_t))
+            end_dt = tz.localize(datetime.combine(d, end_t)) if end_t else start_dt + timedelta(hours=2)
+            ical_event.add("dtstart", start_dt)
+            ical_event.add("dtend", end_dt)
+        else:
+            ical_event.add("dtstart", d)
+            ical_event.add("dtend", d + timedelta(days=1))
 
-            loc = ev.get("location")
-            if loc:
-                ical_event.add("location", loc)
-            ical_event.add("description", f"{course} | {ev.get('type', '')}")
-            cal.add_component(ical_event)
+        loc = ev.get("location")
+        if loc:
+            ical_event.add("location", loc)
+        ical_event.add("description", f"{course} | {ev_type}")
+        if req.color_code:
+            color = _ics_color(ev_type, req.custom_colors)
+            if color:
+                ical_event.add("color", color)
+                ical_event["X-APPLE-CALENDAR-COLOR"] = color
+        cal.add_component(ical_event)
 
     # Add recurring class events
     for sec in req.sections:
@@ -295,8 +535,6 @@ async def generate_ics(req: GenerateIcsRequest):
         section = sec.get("section", "")
         label = "LEC" if sec_type == "lecture" else "TUT"
         summary = f"{course} {label}"
-        if section:
-            summary = f"{course} {label} {section}"
 
         days = sec.get("days", [])
         for day_name in days:
@@ -311,10 +549,15 @@ async def generate_ics(req: GenerateIcsRequest):
                 if loc:
                     ical_event.add("location", loc)
                 prof = sec.get("professor")
-                desc = f"{course} | {sec_type.capitalize()} | Section {section}"
+                desc = f"{sec_type.capitalize()} - Section {section}"
                 if prof:
-                    desc += f" | {prof}"
+                    desc += f"\n{prof}"
                 ical_event.add("description", desc)
+                if req.color_code:
+                    color = EVENT_COLORS.get(sec_type, "")
+                    if color:
+                        ical_event.add("color", color)
+                        ical_event["X-APPLE-CALENDAR-COLOR"] = color
                 cal.add_component(ical_event)
 
     ics_bytes = cal.to_ical()

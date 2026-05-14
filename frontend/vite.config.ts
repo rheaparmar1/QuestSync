@@ -14,6 +14,8 @@ export default defineConfig({
       '/parse-outline': 'http://localhost:8000',
       '/parse-schedule': 'http://localhost:8000',
       '/generate-ics': 'http://localhost:8000',
+      '/auth': 'http://localhost:8000',
+      '/upload-to-google': 'http://localhost:8000',
     },
   },
 })
