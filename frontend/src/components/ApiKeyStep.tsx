@@ -107,12 +107,6 @@ export function ApiKeyStep({ onSubmit }: Props) {
           </p>
         </div>
 
-        {/* Trust badge */}
-        <p className="inline-flex items-center gap-1.5 text-xs text-gray-500 bg-gray-100 rounded-full px-3 py-1.5">
-          <span>🔒</span>
-          <span>No Waterloo login required &nbsp;·&nbsp; Your files and key are never stored</span>
-        </p>
-
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row gap-3 justify-center pt-1">
           <Button
