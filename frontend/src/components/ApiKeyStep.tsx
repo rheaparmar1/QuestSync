@@ -229,18 +229,19 @@ export function ApiKeyStep({ onSubmit }: Props) {
       {/* ── API key form ──────────────────────────────────────────────── */}
       <div ref={formRef} className="rounded-2xl border border-gray-200 bg-white shadow-sm p-6 space-y-4">
         <div className="space-y-1">
-          <h3 className="font-bold text-gray-900 text-base">One quick thing to get started</h3>
+          <h3 className="font-bold text-gray-900 text-base">Connect Claude to continue</h3>
           <p className="text-sm text-gray-500 leading-relaxed">
-            QuestSync uses AI to read your course outlines automatically. Paste your{' '}
+            QuestSync uses Claude AI to extract assignments, exams, and deadlines from your outlines.
+            Enter your{' '}
             <a
               href="https://console.anthropic.com"
               target="_blank"
               rel="noreferrer"
               className="text-gray-800 font-medium underline underline-offset-2 hover:text-black"
             >
-              API key
+              Claude API key
             </a>{' '}
-            below to begin — costs less than $0.20 per session.
+            below to start syncing.
           </p>
         </div>
 
