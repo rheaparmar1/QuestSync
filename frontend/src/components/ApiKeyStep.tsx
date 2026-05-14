@@ -1,8 +1,26 @@
 import { useState } from 'react'
-import { Key } from 'lucide-react'
+import { Upload, Sparkles, CalendarCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 const API = import.meta.env.VITE_API_URL ?? ''
+
+const STEPS = [
+  {
+    icon: <Upload className="h-5 w-5 text-black" />,
+    title: 'Upload your outlines',
+    desc: 'Drop all your course outline PDFs or HTML files and your Quest schedule screenshot.',
+  },
+  {
+    icon: <Sparkles className="h-5 w-5 text-black" />,
+    title: 'Claude reads everything',
+    desc: 'Claude AI extracts every exam, midterm, quiz, assignment, and class time automatically.',
+  },
+  {
+    icon: <CalendarCheck className="h-5 w-5 text-black" />,
+    title: 'Export to your calendar',
+    desc: 'Download a .ics file or upload directly to Google Calendar — colour coded by type.',
+  },
+]
 
 interface Props {
   onSubmit: (key: string) => void
@@ -36,18 +54,45 @@ export function ApiKeyStep({ onSubmit }: Props) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-uw-gold">
-          <Key className="h-5 w-5 text-black" />
+    <div className="space-y-8">
+      {/* Hero */}
+      <div className="text-center space-y-2">
+        <div className="flex justify-center mb-3">
+          <img src="/logo.svg" alt="QuestSync" className="h-14 w-14 rounded-2xl" />
         </div>
-        <div>
-          <h2 className="text-lg font-bold">Enter your Claude API key</h2>
-          <p className="text-sm text-gray-500">Your key is used only for this session and never stored.</p>
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">Welcome to QuestSync</h1>
+        <p className="text-gray-500 text-sm max-w-sm mx-auto">
+          The fastest way to get your University of Waterloo courses into your calendar.
+        </p>
       </div>
 
-      <div className="space-y-2">
+      {/* How it works */}
+      <div className="space-y-3">
+        {STEPS.map((step, i) => (
+          <div key={i} className="flex items-start gap-4 rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-uw-gold">
+              {step.icon}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">{step.title}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{step.desc}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* API key input */}
+      <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-5">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Enter your Claude API key to get started</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            QuestSync uses Claude AI to read your documents. Your key is used only for this session and never stored.{' '}
+            <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" className="underline hover:text-gray-600">
+              Get a key
+            </a>
+            {' '}— you need at least $1 in credits (~10 sessions).
+          </p>
+        </div>
         <div className="relative">
           <input
             type={show ? 'text' : 'password'}
@@ -66,28 +111,20 @@ export function ApiKeyStep({ onSubmit }: Props) {
           </button>
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
-        <p className="text-xs text-gray-400">
-          Get a key at{' '}
-          <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" className="underline hover:text-gray-600">
-            console.anthropic.com
-          </a>
-          . You need at least $1 in credits.
-        </p>
+        <Button
+          size="lg"
+          className="w-full"
+          disabled={!key.startsWith('sk-') || validating}
+          onClick={handleContinue}
+        >
+          {validating ? (
+            <span className="flex items-center gap-2">
+              <span className="h-4 w-4 rounded-full border-2 border-black border-t-transparent animate-spin" />
+              Validating…
+            </span>
+          ) : 'Get Started →'}
+        </Button>
       </div>
-
-      <Button
-        size="lg"
-        className="w-full"
-        disabled={!key.startsWith('sk-') || validating}
-        onClick={handleContinue}
-      >
-        {validating ? (
-          <span className="flex items-center gap-2">
-            <span className="h-4 w-4 rounded-full border-2 border-black border-t-transparent animate-spin" />
-            Validating…
-          </span>
-        ) : 'Continue'}
-      </Button>
     </div>
   )
 }

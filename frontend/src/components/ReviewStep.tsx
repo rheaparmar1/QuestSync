@@ -88,6 +88,16 @@ export function ReviewStep({
   const EXAM_TYPES = new Set(['exam', 'midterm', 'quiz'])
   const ASSIGN_TYPES = new Set(['assignment', 'project'])
 
+  // What types actually exist in the data
+  const hasLectures = sections.some(s => s.type === 'lecture')
+  const hasTutorials = sections.some(s => s.type === 'tutorial')
+  const hasExams = events.some(e => EXAM_TYPES.has(e.type))
+  const hasAssignments = events.some(e => ASSIGN_TYPES.has(e.type))
+  const presentColorTypes = new Set<string>([
+    ...events.map(e => e.type === 'project' ? 'assignment' : e.type),
+    ...sections.map(s => s.type),
+  ])
+
   const readyEvents = events.filter((e) => {
     if (e.is_tbd || !e.date) return false
     if (EXAM_TYPES.has(e.type) && !includeAssessments) return false
@@ -108,22 +118,30 @@ export function ReviewStep({
       <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
         <h2 className="font-semibold text-gray-900">Include in calendar</h2>
         <div className="flex flex-col sm:flex-row flex-wrap gap-4">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <Switch checked={includeLectures} onCheckedChange={onToggleLectures} />
-            <span className="text-sm font-medium">Lectures</span>
-          </label>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <Switch checked={includeTutorials} onCheckedChange={onToggleTutorials} />
-            <span className="text-sm font-medium">Tutorials</span>
-          </label>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <Switch checked={includeAssessments} onCheckedChange={onToggleAssessments} />
-            <span className="text-sm font-medium">Exams / Midterms / Quizzes</span>
-          </label>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <Switch checked={includeAssignments} onCheckedChange={onToggleAssignments} />
-            <span className="text-sm font-medium">Assignments</span>
-          </label>
+          {hasLectures && (
+            <label className="flex items-center gap-3 cursor-pointer">
+              <Switch checked={includeLectures} onCheckedChange={onToggleLectures} />
+              <span className="text-sm font-medium">Lectures</span>
+            </label>
+          )}
+          {hasTutorials && (
+            <label className="flex items-center gap-3 cursor-pointer">
+              <Switch checked={includeTutorials} onCheckedChange={onToggleTutorials} />
+              <span className="text-sm font-medium">Tutorials</span>
+            </label>
+          )}
+          {hasExams && (
+            <label className="flex items-center gap-3 cursor-pointer">
+              <Switch checked={includeAssessments} onCheckedChange={onToggleAssessments} />
+              <span className="text-sm font-medium">Exams / Midterms / Quizzes</span>
+            </label>
+          )}
+          {hasAssignments && (
+            <label className="flex items-center gap-3 cursor-pointer">
+              <Switch checked={includeAssignments} onCheckedChange={onToggleAssignments} />
+              <span className="text-sm font-medium">Assignments</span>
+            </label>
+          )}
         </div>
 
         <div className="border-t border-gray-100 pt-4 space-y-3">
@@ -133,7 +151,7 @@ export function ReviewStep({
           </label>
           {colorCode && (
             <div className="flex flex-wrap gap-4 pl-1">
-              {LEGEND_ITEMS.map(({ type, label }) => (
+              {LEGEND_ITEMS.filter(({ type }) => presentColorTypes.has(type)).map(({ type, label }) => (
                 <label key={type} className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
                   <span className="relative inline-block h-5 w-5 rounded-full border border-gray-300 shrink-0" style={{ backgroundColor: eventColors[type] }}>
                     <input
