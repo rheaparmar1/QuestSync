@@ -238,7 +238,7 @@ export function ApiKeyStep({ onSubmit }: Props) {
             >
               Claude API key
             </a>{' '}
-            below to start syncing.
+            below to start syncing. Most imports cost less than $0.20.
           </p>
         </div>
 
