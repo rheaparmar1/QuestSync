@@ -102,6 +102,20 @@ def _is_html(file: UploadFile) -> bool:
     return name.endswith(".html") or name.endswith(".htm") or "html" in ct
 
 
+@app.post("/validate-key")
+async def validate_key(x_claude_key: Optional[str] = Header(None)):
+    try:
+        client = get_client(x_claude_key)
+        client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1,
+            messages=[{"role": "user", "content": "hi"}],
+        )
+        return {"valid": True}
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid API key. Please check and try again.")
+
+
 @app.post("/parse-outline")
 async def parse_outline(file: UploadFile = File(...), x_claude_key: Optional[str] = Header(None)):
     contents = await file.read()
