@@ -254,9 +254,7 @@ export default function App() {
         )}
 
         {step === 'apikey' && (
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <ApiKeyStep onSubmit={(key) => { setClaudeKey(key); setStep('upload') }} />
-          </div>
+          <ApiKeyStep onSubmit={(key) => { setClaudeKey(key); setStep('upload') }} />
         )}
 
         {step === 'upload' && (
