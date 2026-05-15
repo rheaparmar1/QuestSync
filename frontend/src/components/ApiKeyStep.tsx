@@ -221,6 +221,9 @@ export function ApiKeyStep({ onSubmit }: Props) {
             </div>
           ))}
         </div>
+        <p className="text-xs text-gray-400 text-center leading-relaxed px-2">
+          If you choose Google Calendar, QuestSync requests calendar access solely to create course events on your behalf. We never read, store, or share your calendar data.
+        </p>
       </div>
 
       {/* ── API key form ──────────────────────────────────────────────── */}
