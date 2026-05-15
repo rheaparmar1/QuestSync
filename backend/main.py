@@ -31,13 +31,16 @@ _frontend_url = os.environ.get("FRONTEND_URL", "")
 _allow_origins = ["http://localhost:5173", "http://localhost:3000"]
 if _frontend_url:
     _allow_origins.append(_frontend_url)
+    # also allow www variant if present
+    if _frontend_url.startswith("https://"):
+        _allow_origins.append(_frontend_url.replace("https://", "https://www."))
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allow_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Claude-Key", "Authorization"],
 )
 
 def get_client(user_key: Optional[str] = None):
